@@ -23,13 +23,18 @@ int main(int argc, char **argv)
     int prefillingcache = 0;
     int coef = 1;
     int nbopt = 0;
+int flops = 0;
 
-    while ((c = getopt(argc, argv, "c")) != -1)
+    while ((c = getopt(argc, argv, "cf")) != -1)
 	switch (c) {
 	case 'c':
 	    prefillingcache = 1;
 	    nbopt++;
 	    break;
+	case 'f':
+	flops = 1;
+	nbopt++;
+	break;
 	default:
 	    abort();
 	}
@@ -47,25 +52,26 @@ int main(int argc, char **argv)
 	size *= coef * atoi(argv[pos]);
     }
     if (1 == coef) {
-	size *= sizeof(int);
+	size *= sizeof(float);
     }
     //Setup kernel arguments
-    int *in = (int *) malloc(size);
-    int *out = (int *) malloc(size);
+    float *in = (float *) malloc(size);
+    float *out = (float *) malloc(size);
     memset(out, 0, size);
     memset(in, 0, size);
-    for (i = 0; i < (size / sizeof(int)); i++)
+    for (i = 0; i < (size / sizeof(float)); i++)
 	in[i] = i;
 
     // Mesure NBR_COPY copy vector
     //gettimeofday(&tstart, NULL);
     //for (int i = 0; i < LOOPS; i++) {
-    SNK_INIT_LPARM(lparm, size / sizeof(int));
+    SNK_INIT_LPARM(lparm, size / sizeof(float));
     //Fill Caches
     if (prefillingcache) {
 	printf("Pre-filling cache option SET\n");
 	for (i = 0; i < 64; i++) {
-	    vcopy(in, out, lparm);
+		if(flops) flops_3(in, out, lparm)
+		else vcopy(in, out, lparm);
 	}
     }
 
@@ -89,13 +95,20 @@ int main(int argc, char **argv)
     var /= NB_MEASURE;
     //var -= duration * duration;
 
-    printf
-	("HSA: Vector of %lu integer of %d-bytes = %lu Bytes takes %lu usec [+/-var %lu]\n",
-	 (size / sizeof(int)), (int) sizeof(int), size, duration, var);
+	if(flops){
+	printf
+                ("HSA: Vector of %lu integer of %d-bytes = %lu Bytes takes %lu usec [+/-var %lu] => Speed = %.3f\n",
+                (size / sizeof(float)), (int) sizeof(float), size, duration, var, (float)(3.0 * size/sizeof(float) / duration * 1000000));
+	}
+	else{
+    	printf
+		("HSA: Vector of %lu integer of %d-bytes = %lu Bytes takes %lu usec [+/-var %lu]\n",
+	 	(size / sizeof(float)), (int) sizeof(float), size, duration, var);
+	}
     //Validate
     bool valid = true;
     int failIndex = 0;
-    for (i = 0; i < (size / sizeof(int)); i++) {
+    for (i = 0; i < (size / sizeof(float)); i++) {
 	if (verbose && i < 10)
 	    printf("in[%d]=%d, out[%d]=%d, ", i, in[i], i, out[i]);
 	if (out[i] != in[i]) {
